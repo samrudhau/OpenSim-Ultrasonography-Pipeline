@@ -1,5 +1,7 @@
 # OpenSim Biomechanical Pipeline
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20252587.svg)](https://doi.org/10.5281/zenodo.20252587)
+
 Automated Python pipeline for multi-patient biomechanical analysis using OpenSim.
 Replaces manual GUI steps for Inverse Dynamics, Static Optimization, and Joint
 Reaction Analysis — and compiles results into a single JAMOVI-ready CSV.
