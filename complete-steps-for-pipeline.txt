@@ -1,0 +1,34 @@
+1. open opensim Gui
+2. click on file , open model, from opsensim data>model>
+   load lalulrich scaled model osim
+3. click on file, load motion, from kinematics>
+   open usg.mot file
+4. then tools, scale model,
+   then click on "add marker from files" under subject data
+     Added neutral.trc from MArkerData folder
+   then click on "add marker data for measurements" under scale model
+      Added neutral.trc from MArkerData folder
+   then click on "marker data for static pose" under adjust model markers
+       Added usg.trc from MArkerData folder
+5. Click on run and close dialog box (adds a new model)
+6. click on tools, inverse kinematics
+   click on marker data for trail, open usg.trc from MarkerData
+7. click on run and close dialog box after completion of run. (IK Results)
+8. click on tools, inverse dynamics
+   input: loaded motion-> IKResults
+9. click on run and close dialog box after completion of run. (ID Results)
+10. click on tools, static optimisation
+   input: loaded motion-> IDResults
+   select filter coordinates checkbox
+   skip interval, analyze every 4 steps
+   output:
+      prefix: LAlulrich2022_scaled-scaled
+      directory: opensimdata/model
+9. click on run and close dialog box after completion of run.
+
+
+
+
+
+
+

@@ -1,0 +1,227 @@
+# ============================================================
+# pipeline_config.yaml
+# Global settings for the OpenSim biomechanical pipeline.
+# Edit this file to change analysis parameters for ALL participants.
+# No code changes are needed when tuning these values.
+# ============================================================
+
+# --- Pipeline Mode ---
+# 'compute'      : Run OpenSim analyses (ID, SO) via Python API, then validate
+#                  against pre-computed GUI outputs (requires opensim conda pkg)
+# 'precomputed'  : Read pre-computed OpenSim GUI outputs directly (no OpenSim API)
+pipeline_mode: compute
+
+# --- Data Locations ---
+data_root: "D:/OPENCAP FILES - Copy"
+output_root: "D:/OPENCAP FILES - Copy/opensim_pipeline/outputs"
+results_root: "D:/OPENCAP FILES - Copy/opensim_pipeline/results"
+# Pattern used to detect patient folders inside data_root.
+# A folder qualifies if it contains BOTH of these sub-directories:
+patient_folder_markers:
+  - "MarkerData"
+  - "OpenSimData"
+
+# Task trial file name pattern (glob). Used to find the motion file in OpenSimData/Kinematics/
+# The first match is used. Common patterns: usg*.mot, task*.mot, trial*.mot
+task_mot_pattern: "*.mot"
+
+# Static / neutral trial TRC file name pattern
+neutral_trc_pattern: "neutral*.trc"
+
+# Task trial TRC file name pattern
+task_trc_pattern: "usg*.trc"
+
+# --- Model ---
+model:
+  # FIX: Use the OpenCap pre-scaled model (same model as GUI).
+  # Re-scaling from scratch (false) produces different segment geometry →
+  # systematically wrong ID moments (lumbar ~49% low, arm ~53% low).
+  use_opencap_scaled_model: true
+  # Glob pattern to find the scaled model inside OpenSimData/Model/
+  scaled_model_pattern: "*_scaled.osim"
+
+# --- Inverse Kinematics ---
+# Note: OpenCap already performs IK and provides .mot files.
+# Setting use_opencap_kinematics: true skips re-running IK (recommended).
+inverse_kinematics:
+  use_opencap_kinematics: true    # FIX: Use OpenCap .mot directly — matches GUI workflow
+  ik_accuracy: 1.0e-8
+  constraint_weight: 20.0
+  report_errors: true
+  rms_residual_threshold_cm: 2.0  # IK quality check: warn if any marker RMS > this
+
+# --- Inverse Dynamics ---
+inverse_dynamics:
+  lowpass_filter_freq: 6.0      # Hz - Butterworth cutoff for kinematic smoothing before ID
+  filter_order: 4               # 4th-order zero-lag (forward-backward)
+  output_gen_forces: false
+  # FIX: Clip t_start to 0.0 to avoid negative-time offsets from OpenCap .mot files.
+  # The GUI always starts analysis at t=0. Negative start times skew RMS computation.
+  clip_start_time: 0.0
+
+# --- Static Optimization ---
+static_optimization:
+  activation_exponent: 2        # Sum of squared activations (occupational biomechanics standard)
+  use_model_force_set: true
+  reserve_optimal_force: 1000.0 # N - reserve actuators added to all coordinates for convergence
+  lowpass_cutoff_frequency: 6.0 # Hz - filter kinematics before SO (-1 to disable)
+  step_interval: 4              # Process every Nth frame (4 = match GUI: ~0.0667s between SO rows)
+  # FIX: Do NOT lock coordinates. The GUI never locks pelvis/ankle/subtalar/mtp —
+  # it lets reserve actuators handle unconstrained DOFs. Locking those coordinates
+  # suppresses ankle/hip muscle activity by 70-82% relative to GUI.
+  lock_coordinates: []
+  # FIX: Clip t_start to 0.0 to prevent the OpenCap mot negative-time offset from
+  # shifting the SO step grid and producing 254 rows instead of ~240.
+  clip_start_time: 0.0
+
+# --- Muscle Group Mapping ---
+# Maps functional muscle groups (thesis labels) to OpenSim muscle column names
+# in the Lai-Ulrich model's Static Optimization output.
+#
+# VERIFIED against actual column names in the pre-computed
+# *_StaticOptimization_activation.sto and *_StaticOptimization_force.sto files.
+#
+# Available muscles in the model (80 total):
+#   Lower extremity (per side): addbrev, addlong, addmagDist, addmagIsch, addmagMid,
+#     addmagProx, bflh, bfsh, edl, ehl, fdl, fhl, gaslat, gasmed, glmax1, glmax2,
+#     glmax3, glmed1, glmed2, glmed3, glmin1, glmin2, glmin3, grac, iliacus,
+#     perbrev, perlong, piri, psoas, recfem, sart, semimem, semiten, soleus,
+#     tfl, tibant, tibpost, vasint, vaslat, vasmed
+#   Reserve actuators: lumbar_ext, lumbar_bend, lumbar_rot, shoulder_flex_r/l,
+#     shoulder_add_r/l, shoulder_rot_r/l, elbow_flex_r/l, pro_sup_r/l
+muscle_groups:
+  hip_flexors:
+    - iliacus_r
+    - iliacus_l
+    - psoas_r
+    - psoas_l
+    - recfem_r
+    - recfem_l
+  hip_extensors:
+    - glmax1_r
+    - glmax1_l
+    - glmax2_r
+    - glmax2_l
+    - glmax3_r
+    - glmax3_l
+    - semimem_r
+    - semimem_l
+    - semiten_r
+    - semiten_l
+    - bflh_r
+    - bflh_l
+  hip_abductors:
+    - glmed1_r
+    - glmed1_l
+    - glmed2_r
+    - glmed2_l
+    - glmed3_r
+    - glmed3_l
+    - glmin1_r
+    - glmin1_l
+    - glmin2_r
+    - glmin2_l
+    - glmin3_r
+    - glmin3_l
+    - tfl_r
+    - tfl_l
+  hip_adductors:
+    - addbrev_r
+    - addbrev_l
+    - addlong_r
+    - addlong_l
+    - addmagDist_r
+    - addmagDist_l
+    - addmagIsch_r
+    - addmagIsch_l
+    - addmagMid_r
+    - addmagMid_l
+    - addmagProx_r
+    - addmagProx_l
+    - grac_r
+    - grac_l
+  knee_extensors:
+    - recfem_r
+    - recfem_l
+    - vasint_r
+    - vasint_l
+    - vaslat_r
+    - vaslat_l
+    - vasmed_r
+    - vasmed_l
+  knee_flexors:
+    - bflh_r
+    - bflh_l
+    - bfsh_r
+    - bfsh_l
+    - semimem_r
+    - semimem_l
+    - semiten_r
+    - semiten_l
+    - sart_r
+    - sart_l
+    - grac_r
+    - grac_l
+  ankle_plantarflexors:
+    - soleus_r
+    - soleus_l
+    - gaslat_r
+    - gaslat_l
+    - gasmed_r
+    - gasmed_l
+    - tibpost_r
+    - tibpost_l
+    - perlong_r
+    - perlong_l
+    - perbrev_r
+    - perbrev_l
+    - fdl_r
+    - fdl_l
+    - fhl_r
+    - fhl_l
+  ankle_dorsiflexors:
+    - tibant_r
+    - tibant_l
+    - edl_r
+    - edl_l
+    - ehl_r
+    - ehl_l
+
+# --- Joint DOF → Thesis Label Mapping ---
+# Maps OpenSim coordinate names in the Lai-Ulrich model to thesis variable names.
+# VERIFIED against actual column names in the pre-computed inverse_dynamics.sto files.
+# ID columns use suffixes: _moment (for rotational DOFs) or _force (for translational DOFs)
+joint_dof_map:
+  lumbar_extension: lumbar_flexion_Nm    # OpenSim uses extension; negate for flexion moment
+  lumbar_bending: lumbar_sideflex_Nm
+  lumbar_rotation: lumbar_rotation_Nm
+  arm_flex_r: arm_flexion_Nm
+  arm_add_r: arm_abduction_Nm
+  arm_rot_r: arm_rotation_Nm
+  elbow_flex_r: elbow_flexion_Nm
+  pro_sup_r: prosup_Nm
+
+# --- IK Joint Angle Map ---
+# Same coordinate names as above, mapped to kinematic output labels
+# VERIFIED against actual column names in the pre-computed usg.mot files.
+joint_angle_map:
+  lumbar_extension: lumbar_flexion_deg
+  lumbar_bending: lumbar_sideflex_deg
+  lumbar_rotation: lumbar_rotation_deg
+  arm_flex_r: shoulder_flexion_deg
+  arm_add_r: shoulder_abduction_deg
+  arm_rot_r: shoulder_rotation_deg
+  elbow_flex_r: elbow_flexion_deg
+  pro_sup_r: forearm_pronation_deg
+
+# --- Output / Plotting ---
+output:
+  save_plots: true
+  plot_format: png              # png or pdf
+  overwrite_existing: true      # Safety flag: set true to force re-run for existing participants
+  plot_muscles:                 # Which muscle groups to plot per participant
+    - hip_flexors
+    - hip_extensors
+    - knee_extensors
+    - ankle_plantarflexors
+    - ankle_dorsiflexors

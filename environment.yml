@@ -1,0 +1,20 @@
+name: opensim_pipeline
+
+channels:
+  - opensim-org       # Official OpenSim Python bindings
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.10          # Required by OpenSim Python API build
+  - opensim=4.5          # OpenSim musculoskeletal simulation engine (Python bindings)
+  - numpy>=1.24
+  - pandas>=2.0
+  - scipy>=1.11
+  - matplotlib>=3.7
+  - pyyaml
+  - requests
+  - pytest>=7.4
+  - pip
+  - pip:
+      - python-dotenv    # For .env credential loading
