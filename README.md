@@ -4,7 +4,7 @@
 
 Automated Python pipeline for multi-patient biomechanical analysis using OpenSim.
 Replaces manual GUI steps for Inverse Dynamics, Static Optimization, and Joint
-Reaction Analysis — and compiles results into a single JAMOVI-ready CSV.
+Reaction Analysis and compiles results into a single JAMOVI-ready CSV.
 
 ---
 
@@ -19,7 +19,7 @@ Reaction Analysis — and compiles results into a single JAMOVI-ready CSV.
 
 ---
 
-## Step 1 — Create the Conda Environment (one-time setup)
+## Step 1 : Create the Conda Environment (one-time setup)
 
 Open a terminal and run the following from the repository root:
 
@@ -33,7 +33,7 @@ This installs OpenSim + all dependencies. It may take several minutes.
 
 ---
 
-## Step 2 — Set Up Participants
+## Step 2 : Set Up Participants
 
 Run the setup script to auto-discover all patient folders and build `participants.csv`.
 Make sure you have set `data_root` in `config/pipeline_config.yaml` before running.
@@ -72,24 +72,24 @@ Compare joint coordinate names against `joint_dof_map` and `joint_angle_map` in 
 
 ---
 
-## Step 3 — Review the Config
+## Step 3 : Review the Config
 
 Open `config/pipeline_config.yaml` and verify important settings. The most
-important value to set before running the pipeline is `data_root` — it should
+important value to set before running the pipeline is `data_root` : it should
 point to the folder that contains your participant subfolders.
 
 Other useful settings:
 
-- `use_opencap_kinematics` (default: `true`) — use OpenCap `.mot` kinematics
-- `use_opencap_scaled_model` (default: `true`) — use OpenCap-produced scaled `.osim`
-- `lowpass_filter_freq` (default: `6.0`) — low-pass filter frequency for kinematics
-- `activation_exponent` (default: `2`) — exponent used in SO force model
-- `save_plots` (default: `true`) — save per-participant activation plots
-- `overwrite_existing` (default: `false`) — set to `true` to force re-runs
+- `use_opencap_kinematics` (default: `true`) : use OpenCap `.mot` kinematics
+- `use_opencap_scaled_model` (default: `true`) : use OpenCap-produced scaled `.osim`
+- `lowpass_filter_freq` (default: `6.0`) : low-pass filter frequency for kinematics
+- `activation_exponent` (default: `2`) : exponent used in SO force model
+- `save_plots` (default: `true`) : save per-participant activation plots
+- `overwrite_existing` (default: `false`) : set to `true` to force re-runs
 
 ---
 
-## Step 4 — Run the Pipeline
+## Step 4 : Run the Pipeline
 
 ### Full run (all participants):
 
@@ -121,7 +121,7 @@ python run_pipeline.py --validate-only
 
 ---
 
-## Step 5 — Run Unit Tests
+## Step 5 : Run Unit Tests
 
 Verify the RMS calculations are correct before running the full pipeline:
 
