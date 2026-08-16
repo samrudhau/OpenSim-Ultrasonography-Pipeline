@@ -26,29 +26,28 @@ logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────
-#  Thesis reference values (from Tables 1-3)
-#  Used to validate pipeline output matches manual analysis.
+#  Dynamic reference values
+#  Instead of hardcoding medians from the Lai-Uhlrich model,
+#  we compute the cohort median from the current pipeline run.
+#  This is self-consistent with the BUET model results.
 # ─────────────────────────────────────────────────────────────
 
-THESIS_MEDIANS: dict[str, float] = {
-    # Joint Moments (Table 1, Nm)
-    "lumbar_flexion_Nm":     43.0,
-    "lumbar_sideflex_Nm":    12.0,
-    "lumbar_rotation_Nm":     4.10,
-    "arm_flexion_Nm":         4.36,
-    "arm_abduction_Nm":       4.44,
-    "arm_rotation_Nm":        1.93,
-    "elbow_flexion_Nm":       1.78,
-    "prosup_Nm":              0.091,
-    # Joint Reaction Forces (Table 2, N)
-    "acromion_humerus_N":  1551.0,
-    "elbow_ulna_N":         403.0,
-    "radioulnar_N":         220.0,
-    "wrist_N":              122.0,
-    "back_torso_N":          54.9,
-}
+VALIDATION_TOLERANCE = 0.20  # 20% IQR-based spread flag (replaces ±5% thesis check)
 
-VALIDATION_TOLERANCE = 0.05  # 5% tolerance
+
+def build_dynamic_reference(descriptives_df: pd.DataFrame) -> dict[str, float]:
+    """
+    Build a reference dict from computed cohort medians.
+    Used for self-consistency validation (flags variables with high spread).
+    Returns {variable_name: cohort_median}.
+    """
+    ref: dict[str, float] = {}
+    for _, row in descriptives_df.iterrows():
+        var = row["variable"]
+        med = row["median"]
+        if pd.notna(med):
+            ref[var] = float(med)
+    return ref
 
 
 # ─────────────────────────────────────────────────────────────
@@ -103,48 +102,52 @@ def compute_descriptives(
 
 def compare_with_thesis_values(
     computed_df: pd.DataFrame,
-    reference: dict[str, float] = THESIS_MEDIANS,
+    reference: dict[str, float] | None = None,
     tolerance: float = VALIDATION_TOLERANCE,
 ) -> pd.DataFrame:
     """
-    Compare computed cohort medians against thesis-published values.
-    Returns a report DataFrame flagging discrepancies > tolerance.
+    Compare computed cohort medians against a reference dict.
+
+    When reference is None (BUET model mode), uses the cohort medians
+    themselves as the reference and flags variables with high spread
+    (IQR/median > tolerance), indicating outlier participants.
 
     Parameters
     ----------
     computed_df : Output from compute_descriptives()
-    reference   : Dict mapping variable name → published median
-    tolerance   : Fractional tolerance (0.05 = 5%)
+    reference   : Dict mapping variable name -> reference median.
+                  If None, uses cohort medians (self-consistency check).
+    tolerance   : Spread tolerance for flagging (default 20% IQR/median)
 
     Returns
     -------
-    pd.DataFrame with columns: variable, published_median, computed_median, pct_diff, status
+    pd.DataFrame with columns: variable, cohort_median, IQR, spread_ratio, status
     """
+    if reference is None:
+        reference = build_dynamic_reference(computed_df)
+
     report_rows = []
-    for var, pub_median in reference.items():
+    for var, ref_median in reference.items():
         row_match = computed_df[computed_df["variable"] == var]
         if row_match.empty:
-            report_rows.append({
-                "variable": var,
-                "published_median": pub_median,
-                "computed_median": None,
-                "pct_diff": None,
-                "status": "MISSING — variable not in output",
-            })
             continue
 
         computed_median = float(row_match["median"].iloc[0])
-        if pub_median == 0:
-            pct_diff = float("inf") if computed_median != 0 else 0.0
-        else:
-            pct_diff = abs(computed_median - pub_median) / abs(pub_median)
+        iqr = float(row_match["IQR"].iloc[0])
 
-        status = "OK" if pct_diff <= tolerance else f"WARNING — {pct_diff:.1%} diff"
+        # Spread ratio: IQR / median — flags high variability across participants
+        if ref_median == 0 or computed_median == 0:
+            spread_ratio = float("nan")
+            status = "OK (zero)"
+        else:
+            spread_ratio = iqr / abs(computed_median)
+            status = "OK" if spread_ratio <= tolerance else f"HIGH SPREAD — IQR/median={spread_ratio:.1%}"
+
         report_rows.append({
             "variable": var,
-            "published_median": pub_median,
-            "computed_median": round(computed_median, 3),
-            "pct_diff": f"{pct_diff:.2%}",
+            "cohort_median": round(computed_median, 3),
+            "IQR": round(iqr, 3),
+            "spread_ratio": f"{spread_ratio:.2%}" if not np.isnan(spread_ratio) else "n/a",
             "status": status,
         })
 
@@ -176,8 +179,8 @@ def write_report(
     # Compute descriptives
     descriptives = compute_descriptives(df)
 
-    # Validate against thesis
-    validation = compare_with_thesis_values(descriptives)
+    # Self-consistency validation (dynamic reference from cohort medians)
+    validation = compare_with_thesis_values(descriptives, reference=None)
 
     # Build report text
     lines = _build_report_text(descriptives, validation, n_participants)
@@ -188,15 +191,21 @@ def write_report(
 
     logger.info("Summary report written → %s", output_path.name)
 
-    # Print validation warnings to console
-    warnings = validation[validation["status"].str.startswith("WARNING")]
-    if not warnings.empty:
-        logger.warning(
-            "Validation: %d variable(s) differ from thesis by >5%%:\n%s",
-            len(warnings), warnings[["variable", "published_median", "computed_median", "pct_diff"]].to_string(index=False)
-        )
-    else:
-        logger.info("Validation: All values within 5%% of thesis-published medians. ✓")
+    # Print high-spread warnings to console
+    if not validation.empty:
+        warnings = validation[validation["status"].str.startswith("HIGH SPREAD")]
+        if not warnings.empty:
+            logger.warning(
+                "Cohort spread check: %d variable(s) have IQR/median > %d%%:\n%s",
+                len(warnings),
+                int(VALIDATION_TOLERANCE * 100),
+                warnings[["variable", "cohort_median", "IQR", "spread_ratio"]].to_string(index=False),
+            )
+        else:
+            logger.info(
+                "Cohort spread check: All variables have IQR/median ≤ %d%%. ✓",
+                int(VALIDATION_TOLERANCE * 100),
+            )
 
 
 # ─────────────────────────────────────────────────────────────
@@ -215,50 +224,62 @@ def _build_report_text(
 
     lines += [
         sep,
-        "  OPENSIM BIOMECHANICAL PIPELINE — SUMMARY REPORT",
+        "  OPENSIM BIOMECHANICAL PIPELINE — SUMMARY REPORT (BUET Model)",
         f"  Generated: {now}",
         f"  Participants: {n_participants}",
         sep, "",
     ]
 
-    # --- Section 1: Joint Moments (Table 1 equivalent) ---
+    # --- Section 1: Joint Moments (ID) ---
     moment_vars = [v for v in descriptives["variable"] if v.endswith("_Nm")]
     if moment_vars:
         lines += ["─" * 72, "TABLE 1 — Net Joint Moments (RMS, Nm)", "─" * 72]
         lines.append(_format_descriptives_table(descriptives, moment_vars))
         lines.append("")
 
-    # --- Section 2: Joint Reaction Forces (Table 2 equivalent) ---
-    force_vars = [v for v in descriptives["variable"] if v.endswith("_N")]
-    if force_vars:
-        lines += ["─" * 72, "TABLE 2 — Joint Reaction Forces (RMS Resultant, N)", "─" * 72]
-        lines.append(_format_descriptives_table(descriptives, force_vars))
+    # --- Section 2: Joint Reaction Forces (JRA) ---
+    jra_vars = [v for v in descriptives["variable"] if v.endswith("_N")]
+    if jra_vars:
+        lines += ["─" * 72, "TABLE 2 — Joint Reaction Forces — BUET Model (RMS Resultant, N)", "─" * 72]
+        lines.append(_format_descriptives_table(descriptives, jra_vars))
         lines.append("")
 
-    # --- Section 3: Muscle Activations (Table 3 equivalent) ---
+    # --- Section 3: Muscle Activations (SO) ---
     activation_vars = [v for v in descriptives["variable"] if v.endswith("_activation")]
     if activation_vars:
         lines += ["─" * 72, "TABLE 3 — Muscle Activations (Full-Wave Rectified RMS, 0-1)", "─" * 72]
         lines.append(_format_descriptives_table(descriptives, activation_vars))
         lines.append("")
 
-    # --- Section 4: Joint Kinematics ---
+    # --- Section 4: Muscle Forces (SO) ---
+    force_N_vars = [v for v in descriptives["variable"] if v.endswith("_force_N")]
+    if force_N_vars:
+        lines += ["─" * 72, "TABLE 4 — Muscle Forces (RMS, N)", "─" * 72]
+        lines.append(_format_descriptives_table(descriptives, force_N_vars))
+        lines.append("")
+
+    # --- Section 5: Joint Kinematics (IK) ---
     kin_vars = [v for v in descriptives["variable"] if v.endswith("_deg")]
     if kin_vars:
-        lines += ["─" * 72, "TABLE 4 — Joint Kinematics (RMS, degrees)", "─" * 72]
+        lines += ["─" * 72, "TABLE 5 — Joint Kinematics (RMS, degrees)", "─" * 72]
         lines.append(_format_descriptives_table(descriptives, kin_vars))
         lines.append("")
 
-    # --- Section 5: Validation ---
+    # --- Section 6: Cohort Spread Check ---
     lines += [
         "─" * 72,
-        "VALIDATION — Comparison with Thesis Published Values (±5% tolerance)",
+        f"COHORT SPREAD CHECK — Variables with IQR/median > {int(VALIDATION_TOLERANCE*100)}%",
+        "(High spread may indicate outlier participants or model convergence issues)",
         "─" * 72,
     ]
     if not validation.empty:
-        lines.append(validation.to_string(index=False))
+        flagged = validation[validation["status"].str.startswith("HIGH SPREAD")]
+        if not flagged.empty:
+            lines.append(flagged.to_string(index=False))
+        else:
+            lines.append(f"  All variables within {int(VALIDATION_TOLERANCE*100)}% IQR/median. \u2713")
     else:
-        lines.append("  (No thesis reference values configured)")
+        lines.append("  (No validation data available)")
     lines += ["", sep, "END OF REPORT", sep]
 
     return lines

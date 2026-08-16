@@ -38,24 +38,38 @@ COLUMN_ORDER = [
     "buttock_knee_cm", "buttock_popliteal_cm", "knee_height_cm",
     "popliteal_height_cm", "shoulder_breadth_cm", "shoulder_elbow_cm",
     "elbow_fingertip_cm", "shoulder_grip_cm",
-    # IK joint angles (RMS, degrees)
+    # IK joint angles (RMS, degrees) — lumbar (BUET coord names mapped to labels)
     "lumbar_flexion_deg", "lumbar_sideflex_deg", "lumbar_rotation_deg",
-    "shoulder_flexion_deg", "shoulder_abduction_deg", "shoulder_rotation_deg",
-    "elbow_flexion_deg", "forearm_pronation_deg",
-    # Joint moments from ID (RMS, Nm)
+    # IK joint angles — bilateral upper extremity
+    "shoulder_flexion_r_deg", "shoulder_abduction_r_deg", "shoulder_rotation_r_deg",
+    "elbow_flexion_r_deg", "forearm_pronation_r_deg",
+    "shoulder_flexion_l_deg", "shoulder_abduction_l_deg", "shoulder_rotation_l_deg",
+    "elbow_flexion_l_deg", "forearm_pronation_l_deg",
+    # Joint moments from ID (RMS, Nm) — bilateral
     "lumbar_flexion_Nm", "lumbar_sideflex_Nm", "lumbar_rotation_Nm",
-    "arm_flexion_Nm", "arm_abduction_Nm", "arm_rotation_Nm",
-    "elbow_flexion_Nm", "prosup_Nm",
+    "shoulder_flexion_r_Nm", "shoulder_abduction_r_Nm", "shoulder_rotation_r_Nm",
+    "elbow_flexion_r_Nm", "prosup_r_Nm",
+    "shoulder_flexion_l_Nm", "shoulder_abduction_l_Nm", "shoulder_rotation_l_Nm",
+    "elbow_flexion_l_Nm", "prosup_l_Nm",
     # Muscle activations from SO (RMS, dimensionless 0-1)
-    "hip_flexors_activation", "hip_extensors_activation",
-    "hip_abductors_activation", "hip_adductors_activation",
-    "knee_extensors_activation", "knee_flexors_activation",
-    "ankle_plantarflexors_activation", "ankle_dorsiflexors_activation",
+    "shoulder_abductors_r_activation", "shoulder_abductors_l_activation",
+    "rotator_cuff_r_activation", "rotator_cuff_l_activation",
+    "elbow_flexors_r_activation", "elbow_flexors_l_activation",
+    "elbow_extensors_r_activation", "elbow_extensors_l_activation",
+    "pronators_r_activation", "pronators_l_activation",
+    "lumbar_erectors_activation", "latissimus_dorsi_activation",
     # Muscle forces from SO (RMS, Newtons)
-    "hip_flexors_force_N", "hip_extensors_force_N",
-    "hip_abductors_force_N", "hip_adductors_force_N",
-    "knee_extensors_force_N", "knee_flexors_force_N",
-    "ankle_plantarflexors_force_N", "ankle_dorsiflexors_force_N",
+    "shoulder_abductors_r_force_N", "shoulder_abductors_l_force_N",
+    "rotator_cuff_r_force_N", "rotator_cuff_l_force_N",
+    "elbow_flexors_r_force_N", "elbow_flexors_l_force_N",
+    "elbow_extensors_r_force_N", "elbow_extensors_l_force_N",
+    "pronators_r_force_N", "pronators_l_force_N",
+    "lumbar_erectors_force_N", "latissimus_dorsi_force_N",
+    # Joint Reaction Forces from JRA (RMS resultant, Newtons)
+    "glenohumeral_r_N", "glenohumeral_l_N",
+    "elbow_r_N", "elbow_l_N",
+    "radioulnar_r_N", "radioulnar_l_N",
+    "wrist_r_N", "wrist_l_N",
 ]
 
 
