@@ -41,9 +41,11 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.utils import load_config, discover_patient_folders, get_participant_output_dir
 from src.scaler import get_or_scale_model
+from src.mot_adapter import adapt_mot_for_buet
 from src.ik_runner import run_inverse_kinematics
 from src.id_runner import run_inverse_dynamics
 from src.so_runner import run_static_optimization
+from src.jra_runner import run_joint_reaction_analysis
 from src.signal_processor import process_participant_outputs
 from src.output_validator import validate_participant_outputs
 from src.dataset_compiler import (
@@ -80,13 +82,14 @@ def setup_logging(log_dir: Path) -> None:
 #  Analysis step order
 # ─────────────────────────────────────────────────────────────
 
-STEPS = ["scale", "ik", "id", "so", "process"]
+STEPS = ["scale", "ik", "id", "so", "jra", "process"]
 
 STEP_DESCRIPTIONS = {
-    "scale":    "Model scaling (copy OpenCap-scaled .osim)",
-    "ik":       "Inverse Kinematics (use OpenCap .mot directly)",
-    "id":       "Inverse Dynamics (compute via OpenSim API)",
-    "so":       "Static Optimization (compute via OpenSim API)",
+    "scale":    "Model acquisition (copy BUET model — no scaling)",
+    "ik":       "Inverse Kinematics (use OpenCap .mot + adapt lumbar coords for BUET)",
+    "id":       "Inverse Dynamics (compute via OpenSim API with BUET model)",
+    "so":       "Static Optimization (compute via OpenSim API with BUET model)",
+    "jra":      "Joint Reaction Analysis (glenohumeral, elbow, radioulnar, wrist)",
     "process":  "Signal processing (RMS extraction + plots)",
 }
 
@@ -106,12 +109,12 @@ def run_participant(
     Run all analysis steps for a single participant.
 
     Steps:
-    1. Scale — copy the OpenCap-scaled .osim model
-    2. IK    — use the OpenCap .mot kinematics directly
-    3. ID    — compute Inverse Dynamics via OpenSim API
-    4. SO    — compute Static Optimization via OpenSim API (with reserves)
-    5. Process — extract RMS metrics (pure pandas/numpy)
-    6. Validate — compare computed .sto files with GUI reference outputs
+    1. Scale  — copy the BUET model to the output directory (no scaling)
+    2. IK     — adapt the OpenCap .mot (rename lumbar coords for BUET model)
+    3. ID     — compute Inverse Dynamics via OpenSim API
+    4. SO     — compute Static Optimization via OpenSim API (with reserves)
+    5. JRA    — compute Joint Reaction Analysis (glenohumeral, elbow, wrist)
+    6. Process — extract RMS metrics (pure pandas/numpy)
 
     Returns a result dict (to be appended to master dataset), or None on failure.
     """
@@ -147,19 +150,43 @@ def run_participant(
                 logger.error("Scaled model not found at %s", scaled_model_path)
                 return None
 
-        # ── Step 2: Inverse Kinematics (use OpenCap .mot) ─────────────────
+        # ── Step 2: Inverse Kinematics / .mot adaptation ─────────────────
         if STEPS.index("ik") >= start_idx:
             logger.info("Step: %s", STEP_DESCRIPTIONS["ik"])
-            ik_mot_path = run_inverse_kinematics(
-                participant_id, participant_info, scaled_model_path,
-                participant_output_dir, config,
-            )
+            # Get the raw OpenCap .mot path first
+            if config.get("inverse_kinematics", {}).get("use_opencap_kinematics", True):
+                from src.utils import find_task_mot
+                raw_ik_mot = find_task_mot(
+                    participant_info["kinematics_dir"],
+                    config.get("task_mot_pattern", "*.mot"),
+                )
+            else:
+                raw_ik_mot = run_inverse_kinematics(
+                    participant_id, participant_info, scaled_model_path,
+                    participant_output_dir, config,
+                )
+            # Adapt the .mot for BUET model (rename lumbar coordinates)
+            adapt_dir = participant_output_dir / "mot_adapted"
+            ik_mot_path = adapt_mot_for_buet(raw_ik_mot, adapt_dir, participant_id, config)
         else:
-            from src.utils import find_task_mot
-            ik_mot_path = find_task_mot(
-                participant_info["kinematics_dir"],
-                config.get("task_mot_pattern", "*.mot"),
-            )
+            # When skipping IK, look for the already-adapted .mot
+            adapt_dir = participant_output_dir / "mot_adapted"
+            adapted_candidate = adapt_dir / f"{participant_id}_buet_adapted.mot"
+            if adapted_candidate.exists():
+                ik_mot_path = adapted_candidate
+                logger.info("[%s] Using existing adapted .mot: %s", participant_id, adapted_candidate.name)
+            else:
+                # Fall back to raw .mot if adaptation was never run
+                from src.utils import find_task_mot
+                ik_mot_path = find_task_mot(
+                    participant_info["kinematics_dir"],
+                    config.get("task_mot_pattern", "*.mot"),
+                )
+                logger.warning(
+                    "[%s] No adapted .mot found — using raw OpenCap .mot. "
+                    "Re-run from 'ik' step to apply lumbar coord renaming.",
+                    participant_id,
+                )
 
         # ── Step 3: Inverse Dynamics ──────────────────────────────────────
         id_sto_path = None
@@ -208,10 +235,38 @@ def run_participant(
                 )
 
         if so_outputs is None:
-            logger.error("[%s] Cannot run signal processing without SO outputs. Skipping.", participant_id)
+            logger.error("[%s] Cannot run JRA or signal processing without SO outputs. Skipping.", participant_id)
             return None
 
-        # ── Step 5: Signal processing (RMS extraction + plots) ────────────
+        # ── Step 5: Joint Reaction Analysis ──────────────────────────────
+        jra_sto_path = None
+        if STEPS.index("jra") >= start_idx:
+            logger.info("Step: %s", STEP_DESCRIPTIONS["jra"])
+            try:
+                jra_sto_path = run_joint_reaction_analysis(
+                    participant_id=participant_id,
+                    scaled_model_path=scaled_model_path,
+                    ik_mot_path=ik_mot_path,
+                    so_force_sto_path=so_outputs["force_sto"],
+                    participant_output_dir=participant_output_dir,
+                    config=config,
+                )
+            except Exception as jra_exc:
+                logger.warning(
+                    "[%s] JRA failed — JRA metrics will be NaN: %s",
+                    participant_id, jra_exc,
+                )
+        else:
+            # Fallback: locate existing JRA output when skipping this step
+            jra_dir = participant_output_dir / "jra"
+            jra_matches = list(jra_dir.glob("*JointReaction_ReactionLoads.sto"))
+            if jra_matches:
+                jra_sto_path = jra_matches[0]
+                logger.info("[%s] Using existing JRA output: %s", participant_id, jra_sto_path.name)
+            else:
+                logger.warning("[%s] No existing JRA output found — JRA metrics will be NaN", participant_id)
+
+        # ── Step 6: Signal processing (RMS extraction + plots) ────────────
         logger.info("Step: %s", STEP_DESCRIPTIONS["process"])
         result_row = process_participant_outputs(
             participant_id=participant_id,
@@ -219,6 +274,7 @@ def run_participant(
             so_activation_sto=so_outputs["activation_sto"],
             so_force_sto=so_outputs["force_sto"],
             id_sto=id_sto_path,
+            jra_sto=jra_sto_path,
             config=config,
             output_dir=participant_output_dir,
         )

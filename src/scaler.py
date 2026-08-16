@@ -1,17 +1,22 @@
 """
 src/scaler.py
 -------------
-MODULE 2: Model scaling.
+MODULE 2: Model acquisition / scaling.
 
-Since OpenCap automatically scales the Lai-Ulrich model during session processing
-(producing *_scaled_scaled.osim), this module's primary job is to LOCATE that
-pre-scaled model and copy it to the pipeline's output directory.
+Supports three modes, selected by config['model']:
 
-Optional full re-scaling via opensim.ScaleTool is available if the researcher
-wants to apply custom anthropometric measurements — controlled by
-config['model']['use_opencap_scaled_model']. Default is True (use OpenCap's scale).
+  1. use_buet_model: true  (new default)
+     → Locates 'Bilateral Upper Extremity Trunk Model.osim' inside the
+       participant's OpenSimData/Model/ folder and copies it to the output
+       directory. No scaling is performed — the BUET model is used as-is.
 
-Requires: opensim conda package ONLY if use_opencap_scaled_model=False
+  2. use_opencap_scaled_model: true
+     → Finds and copies the OpenCap-produced *_scaled.osim model.
+
+  3. Both false
+     → Runs opensim.ScaleTool using participant anthropometrics (advanced).
+
+Requires: opensim conda package ONLY in mode 3.
 """
 
 from __future__ import annotations
@@ -34,17 +39,20 @@ def get_or_scale_model(
     config: dict[str, Any],
 ) -> Path:
     """
-    Return the path to the scaled .osim model for this participant.
+    Return the path to the .osim model for this participant.
 
-    If config['model']['use_opencap_scaled_model'] is True (default):
-      → Finds and copies the OpenCap-produced *_scaled_scaled.osim
-
-    If False:
-      → Runs opensim.ScaleTool using participant anthropometrics (advanced)
+    Mode selection (priority order):
+      1. config['model']['use_buet_model']: true
+         → Copies 'Bilateral Upper Extremity Trunk Model.osim' from the
+           participant's OpenSimData/Model/ folder. No scaling.
+      2. config['model']['use_opencap_scaled_model']: true
+         → Copies the OpenCap-produced *_scaled.osim.
+      3. Both false
+         → Runs opensim.ScaleTool (advanced, requires opensim package).
 
     Parameters
     ----------
-    participant_id         : e.g. 'SHIVANGI'
+    participant_id         : e.g. 'AKSHITHA'
     participant_info       : From utils.discover_patient_folders()
     participant_row        : Row from participants.csv (as dict)
     participant_output_dir : Root output dir for this participant
@@ -52,13 +60,22 @@ def get_or_scale_model(
 
     Returns
     -------
-    Path to the scaled .osim model ready for analysis
+    Path to the .osim model ready for analysis
     """
     model_cfg = config.get("model", {})
+    use_buet = model_cfg.get("use_buet_model", False)
     use_opencap = model_cfg.get("use_opencap_scaled_model", True)
     scaled_model_dir = get_analysis_dir(participant_output_dir, "scaled_model")
 
-    if use_opencap:
+    if use_buet:
+        return _use_buet_model(
+            participant_id,
+            participant_info["model_dir"],
+            scaled_model_dir,
+            model_cfg.get("buet_model_name", "Bilateral Upper Extremity Trunk Model.osim"),
+            config,
+        )
+    elif use_opencap:
         return _use_opencap_model(
             participant_id,
             participant_info["model_dir"],
@@ -74,6 +91,42 @@ def get_or_scale_model(
             scaled_model_dir,
             config,
         )
+
+
+def _use_buet_model(
+    participant_id: str,
+    model_dir: Path,
+    output_dir: Path,
+    buet_model_name: str,
+    config: dict[str, Any],
+) -> Path:
+    """
+    Locate the BUET model by filename in the participant's Model/ directory
+    and copy it to the pipeline output directory. No scaling is applied.
+    """
+    source = model_dir / buet_model_name
+    if not source.exists():
+        raise FileNotFoundError(
+            f"BUET model '{buet_model_name}' not found in {model_dir}\n"
+            f"Files present: {[f.name for f in model_dir.iterdir() if f.suffix == '.osim']}"
+        )
+
+    dest = output_dir / f"{participant_id}_buet_model.osim"
+    overwrite = config.get("output", {}).get("overwrite_existing", False)
+
+    if not dest.exists() or overwrite:
+        shutil.copy2(source, dest)
+        logger.info(
+            "[%s] Copied BUET model (no scaling): %s → %s",
+            participant_id, source.name, dest.name,
+        )
+    else:
+        logger.info(
+            "[%s] BUET model already copied at %s — skipping.",
+            participant_id, dest.name,
+        )
+
+    return dest
 
 
 def _use_opencap_model(

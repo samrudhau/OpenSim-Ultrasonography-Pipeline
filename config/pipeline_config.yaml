@@ -1,28 +1,24 @@
 # ============================================================
 # pipeline_config.yaml
 # Global settings for the OpenSim biomechanical pipeline.
-# Edit this file to change analysis parameters for ALL participants.
+# Updated for the Bilateral Upper Extremity Trunk (BUET) model.
 # No code changes are needed when tuning these values.
 # ============================================================
 
 # --- Pipeline Mode ---
-# 'compute'      : Run OpenSim analyses (ID, SO) via Python API, then validate
-#                  against pre-computed GUI outputs (requires opensim conda pkg)
-# 'precomputed'  : Read pre-computed OpenSim GUI outputs directly (no OpenSim API)
 pipeline_mode: compute
 
 # --- Data Locations ---
 data_root: "D:/OPENCAP FILES - Copy"
 output_root: "D:/OPENCAP FILES - Copy/opensim_pipeline/outputs"
 results_root: "D:/OPENCAP FILES - Copy/opensim_pipeline/results"
+
 # Pattern used to detect patient folders inside data_root.
-# A folder qualifies if it contains BOTH of these sub-directories:
 patient_folder_markers:
   - "MarkerData"
   - "OpenSimData"
 
-# Task trial file name pattern (glob). Used to find the motion file in OpenSimData/Kinematics/
-# The first match is used. Common patterns: usg*.mot, task*.mot, trial*.mot
+# Task trial file name pattern (glob)
 task_mot_pattern: "*.mot"
 
 # Static / neutral trial TRC file name pattern
@@ -33,195 +29,347 @@ task_trc_pattern: "usg*.trc"
 
 # --- Model ---
 model:
-  # FIX: Use the OpenCap pre-scaled model (same model as GUI).
-  # Re-scaling from scratch (false) produces different segment geometry →
-  # systematically wrong ID moments (lumbar ~49% low, arm ~53% low).
-  use_opencap_scaled_model: true
-  # Glob pattern to find the scaled model inside OpenSimData/Model/
+  # Use the BUET model directly — no re-scaling performed.
+  # The BUET model is already present in each participant's OpenSimData/Model/ folder.
+  use_opencap_scaled_model: false
+  use_buet_model: true
+  buet_model_name: "Bilateral Upper Extremity Trunk Model.osim"
+  # Fallback pattern (used only if use_opencap_scaled_model: true)
   scaled_model_pattern: "*_scaled.osim"
 
+# --- Lumbar Coordinate Rename ---
+# The OpenCap .mot files use Lai-Uhlrich coordinate names.
+# The BUET model uses different names for the 3 lumbar DOFs.
+# This map is applied by mot_adapter.py before ID/SO/JRA.
+lumbar_coord_rename:
+  lumbar_extension: flex_extension
+  lumbar_bending:   lat_bending
+  lumbar_rotation:  axial_rotation
+
 # --- Inverse Kinematics ---
-# Note: OpenCap already performs IK and provides .mot files.
-# Setting use_opencap_kinematics: true skips re-running IK (recommended).
+# OpenCap already performs IK and provides .mot files.
+# use_opencap_kinematics: true skips re-running IK (recommended).
 inverse_kinematics:
-  use_opencap_kinematics: true    # FIX: Use OpenCap .mot directly — matches GUI workflow
+  use_opencap_kinematics: true
   ik_accuracy: 1.0e-8
   constraint_weight: 20.0
   report_errors: true
-  rms_residual_threshold_cm: 2.0  # IK quality check: warn if any marker RMS > this
+  rms_residual_threshold_cm: 2.0
 
 # --- Inverse Dynamics ---
 inverse_dynamics:
-  lowpass_filter_freq: 6.0      # Hz - Butterworth cutoff for kinematic smoothing before ID
-  filter_order: 4               # 4th-order zero-lag (forward-backward)
+  lowpass_filter_freq: 6.0
+  filter_order: 4
   output_gen_forces: false
-  # FIX: Clip t_start to 0.0 to avoid negative-time offsets from OpenCap .mot files.
-  # The GUI always starts analysis at t=0. Negative start times skew RMS computation.
   clip_start_time: 0.0
 
 # --- Static Optimization ---
 static_optimization:
-  activation_exponent: 2        # Sum of squared activations (occupational biomechanics standard)
+  activation_exponent: 2
   use_model_force_set: true
-  reserve_optimal_force: 1000.0 # N - reserve actuators added to all coordinates for convergence
-  lowpass_cutoff_frequency: 6.0 # Hz - filter kinematics before SO (-1 to disable)
-  step_interval: 4              # Process every Nth frame (4 = match GUI: ~0.0667s between SO rows)
-  # FIX: Do NOT lock coordinates. The GUI never locks pelvis/ankle/subtalar/mtp —
-  # it lets reserve actuators handle unconstrained DOFs. Locking those coordinates
-  # suppresses ankle/hip muscle activity by 70-82% relative to GUI.
+  reserve_optimal_force: 1000.0
+  lowpass_cutoff_frequency: 6.0
+  step_interval: 4
   lock_coordinates: []
-  # FIX: Clip t_start to 0.0 to prevent the OpenCap mot negative-time offset from
-  # shifting the SO step grid and producing 254 rows instead of ~240.
   clip_start_time: 0.0
 
-# --- Muscle Group Mapping ---
-# Maps functional muscle groups (thesis labels) to OpenSim muscle column names
-# in the Lai-Ulrich model's Static Optimization output.
-#
-# VERIFIED against actual column names in the pre-computed
-# *_StaticOptimization_activation.sto and *_StaticOptimization_force.sto files.
-#
-# Available muscles in the model (80 total):
-#   Lower extremity (per side): addbrev, addlong, addmagDist, addmagIsch, addmagMid,
-#     addmagProx, bflh, bfsh, edl, ehl, fdl, fhl, gaslat, gasmed, glmax1, glmax2,
-#     glmax3, glmed1, glmed2, glmed3, glmin1, glmin2, glmin3, grac, iliacus,
-#     perbrev, perlong, piri, psoas, recfem, sart, semimem, semiten, soleus,
-#     tfl, tibant, tibpost, vasint, vaslat, vasmed
-#   Reserve actuators: lumbar_ext, lumbar_bend, lumbar_rot, shoulder_flex_r/l,
-#     shoulder_add_r/l, shoulder_rot_r/l, elbow_flex_r/l, pro_sup_r/l
-muscle_groups:
-  hip_flexors:
-    - iliacus_r
-    - iliacus_l
-    - psoas_r
-    - psoas_l
-    - recfem_r
-    - recfem_l
-  hip_extensors:
-    - glmax1_r
-    - glmax1_l
-    - glmax2_r
-    - glmax2_l
-    - glmax3_r
-    - glmax3_l
-    - semimem_r
-    - semimem_l
-    - semiten_r
-    - semiten_l
-    - bflh_r
-    - bflh_l
-  hip_abductors:
-    - glmed1_r
-    - glmed1_l
-    - glmed2_r
-    - glmed2_l
-    - glmed3_r
-    - glmed3_l
-    - glmin1_r
-    - glmin1_l
-    - glmin2_r
-    - glmin2_l
-    - glmin3_r
-    - glmin3_l
-    - tfl_r
-    - tfl_l
-  hip_adductors:
-    - addbrev_r
-    - addbrev_l
-    - addlong_r
-    - addlong_l
-    - addmagDist_r
-    - addmagDist_l
-    - addmagIsch_r
-    - addmagIsch_l
-    - addmagMid_r
-    - addmagMid_l
-    - addmagProx_r
-    - addmagProx_l
-    - grac_r
-    - grac_l
-  knee_extensors:
-    - recfem_r
-    - recfem_l
-    - vasint_r
-    - vasint_l
-    - vaslat_r
-    - vaslat_l
-    - vasmed_r
-    - vasmed_l
-  knee_flexors:
-    - bflh_r
-    - bflh_l
-    - bfsh_r
-    - bfsh_l
-    - semimem_r
-    - semimem_l
-    - semiten_r
-    - semiten_l
-    - sart_r
-    - sart_l
-    - grac_r
-    - grac_l
-  ankle_plantarflexors:
-    - soleus_r
-    - soleus_l
-    - gaslat_r
-    - gaslat_l
-    - gasmed_r
-    - gasmed_l
-    - tibpost_r
-    - tibpost_l
-    - perlong_r
-    - perlong_l
-    - perbrev_r
-    - perbrev_l
-    - fdl_r
-    - fdl_l
-    - fhl_r
-    - fhl_l
-  ankle_dorsiflexors:
-    - tibant_r
-    - tibant_l
-    - edl_r
-    - edl_l
-    - ehl_r
-    - ehl_l
+# --- Joint Reaction Analysis ---
+joint_reaction_analysis:
+  # Joint names must match the BUET model's JointSet names exactly.
+  # These produce columns like: acromial_r_on_humerus_r_in_ground_fx/fy/fz
+  joints_of_interest:
+    - acromial_r   # Glenohumeral right
+    - acromial_l   # Glenohumeral left
+    - elbow_r      # Humero-ulnar right
+    - elbow_l      # Humero-ulnar left
+    - radioulnar_r # Radio-ulnar right
+    - radioulnar_l # Radio-ulnar left
+    - radius_hand_r # Wrist right
+    - radius_hand_l # Wrist left
+  express_in_frame: "child"   # Express reaction in child body frame
+  apply_on_bodies: "child"    # Report force on child body
 
-# --- Joint DOF → Thesis Label Mapping ---
-# Maps OpenSim coordinate names in the Lai-Ulrich model to thesis variable names.
-# VERIFIED against actual column names in the pre-computed inverse_dynamics.sto files.
-# ID columns use suffixes: _moment (for rotational DOFs) or _force (for translational DOFs)
+  # Column prefix patterns for extracting resultant force per joint from JRA .sto
+  # OpenSim names them: <joint>_on_<child>_in_ground_fx/fy/fz
+  jra_column_map:
+    glenohumeral_r_N:  "acromial_r_on_humerus_r_in_ground"
+    glenohumeral_l_N:  "acromial_l_on_humerus_l_in_ground"
+    elbow_r_N:         "elbow_r_on_ulna_r_in_ground"
+    elbow_l_N:         "elbow_l_on_ulna_l_in_ground"
+    radioulnar_r_N:    "radioulnar_r_on_radius_r_in_ground"
+    radioulnar_l_N:    "radioulnar_l_on_radius_l_in_ground"
+    wrist_r_N:         "radius_hand_r_on_hand_r_in_ground"
+    wrist_l_N:         "radius_hand_l_on_hand_l_in_ground"
+
+# --- Muscle Group Mapping ---
+# BUET model muscle naming convention:
+#   Right side: delt_scap_1 ... delt_scap11, delt_clav_1..4
+#   Left side:  same names with _l suffix (delt_scap_1_l, etc.)
+#
+# Functional groupings for the upper extremity occupational study.
+muscle_groups:
+  # --- Shoulder (Deltoid) ---
+  shoulder_abductors_r:
+    - delt_scap_1
+    - delt_scap_2
+    - delt_scap_3
+    - delt_scap_4
+    - delt_scap_5
+    - delt_scap_6
+    - delt_scap_7
+    - delt_scap_8
+    - delt_scap_9
+    - delt_scap10
+    - delt_scap11
+    - delt_clav_1
+    - delt_clav_2
+    - delt_clav_3
+    - delt_clav_4
+  shoulder_abductors_l:
+    - delt_scap_1_l
+    - delt_scap_2_l
+    - delt_scap_3_l
+    - delt_scap_4_l
+    - delt_scap_5_l
+    - delt_scap_6_l
+    - delt_scap_7_l
+    - delt_scap_8_l
+    - delt_scap_9_l
+    - delt_scap10_l
+    - delt_scap11_l
+    - delt_clav_1_l
+    - delt_clav_2_l
+    - delt_clav_3_l
+    - delt_clav_4_l
+
+  # --- Rotator Cuff ---
+  rotator_cuff_r:
+    - supra_1
+    - supra_2
+    - supra_3
+    - supra_4
+    - infra_1
+    - infra_2
+    - infra_3
+    - infra_4
+    - infra_5
+    - infra_6
+    - subscap_1
+    - subscap_2
+    - subscap_3
+    - subscap_4
+    - subscap_5
+    - subscap_6
+    - subscap_7
+    - subscap_8
+    - subscap_9
+    - subscap10
+    - subscap11
+    - ter_min_1
+    - ter_min_2
+    - ter_min_3
+  rotator_cuff_l:
+    - supra_1_l
+    - supra_2_l
+    - supra_3_l
+    - supra_4_l
+    - infra_1_l
+    - infra_2_l
+    - infra_3_l
+    - infra_4_l
+    - infra_5_l
+    - infra_6_l
+    - subscap_1_l
+    - subscap_2_l
+    - subscap_3_l
+    - subscap_4_l
+    - subscap_5_l
+    - subscap_6_l
+    - subscap_7_l
+    - subscap_8_l
+    - subscap_9_l
+    - subscap10_l
+    - subscap11_l
+    - ter_min_1_l
+    - ter_min_2_l
+    - ter_min_3_l
+
+  # --- Elbow Flexors ---
+  elbow_flexors_r:
+    - bic_l
+    - bic_s
+    - brachialis_1
+    - brachialis_2
+    - brachialis_3
+    - brachialis_4
+    - brachialis_5
+    - brachialis_6
+    - brachialis_7
+    - brachiorad_1
+    - brachiorad_2
+    - brachiorad_3
+  elbow_flexors_l:
+    - bic_l_l
+    - bic_s_l
+    - brachialis_1_l
+    - brachialis_2_l
+    - brachialis_3_l
+    - brachialis_4_l
+    - brachialis_5_l
+    - brachialis_6_l
+    - brachialis_7_l
+    - brachiorad_1_l
+    - brachiorad_2_l
+    - brachiorad_3_l
+
+  # --- Elbow Extensors ---
+  elbow_extensors_r:
+    - tric_long_1
+    - tric_long_2
+    - tric_long_3
+    - tric_long_4
+    - tric_med_1
+    - tric_med_2
+    - tric_med_3
+    - tric_med_4
+    - tric_med_5
+    - tric_lat_1
+    - tric_lat_2
+    - tric_lat_3
+    - tric_lat_4
+    - tric_lat_5
+    - anconeus_1
+    - anconeus_2
+    - anconeus_3
+    - anconeus_4
+    - anconeus_5
+  elbow_extensors_l:
+    - tric_long_1_l
+    - tric_long_2_l
+    - tric_long_3_l
+    - tric_long_4_l
+    - tric_med_1_l
+    - tric_med_2_l
+    - tric_med_3_l
+    - tric_med_4_l
+    - tric_med_5_l
+    - tric_lat_1_l
+    - tric_lat_2_l
+    - tric_lat_3_l
+    - tric_lat_4_l
+    - tric_lat_5_l
+    - anconeus_1_l
+    - anconeus_2_l
+    - anconeus_3_l
+    - anconeus_4_l
+    - anconeus_5_l
+
+  # --- Forearm Pronators ---
+  pronators_r:
+    - pron_teres_1
+    - pron_teres_2
+    - pron_quad_1
+    - pron_quad_2
+    - pron_quad_3
+  pronators_l:
+    - pron_teres_1_l
+    - pron_teres_2_l
+    - pron_quad_1_l
+    - pron_quad_2_l
+    - pron_quad_3_l
+
+  # --- Lumbar Erector Spinae (bilateral) ---
+  lumbar_erectors:
+    - IL_L1_r
+    - IL_L2_r
+    - IL_L3_r
+    - IL_L4_r
+    - IL_L1_l
+    - IL_L2_l
+    - IL_L3_l
+    - IL_L4_l
+    - MF_m1s_r
+    - MF_m2s_r
+    - MF_m3s_r
+    - MF_m4s_r
+    - MF_m5s_r
+    - MF_m1s_l
+    - MF_m2s_l
+    - MF_m3s_l
+    - MF_m4s_l
+    - MF_m5s_l
+
+  # --- Latissimus Dorsi (bilateral) ---
+  latissimus_dorsi:
+    - LD_L1_r
+    - LD_L2_r
+    - LD_L3_r
+    - LD_L4_r
+    - LD_L5_r
+    - LD_T12_r
+    - LD_T11_r
+    - LD_T10_r
+    - LD_L1_l
+    - LD_L2_l
+    - LD_L3_l
+    - LD_L4_l
+    - LD_L5_l
+    - LD_T12_l
+    - LD_T11_l
+    - LD_T10_l
+
+# --- Joint DOF → Output Label Mapping ---
+# Maps BUET model coordinate names → thesis/output variable names.
+# ID columns are named like: <coord>_moment (rotational) or <coord>_force (translational)
 joint_dof_map:
-  lumbar_extension: lumbar_flexion_Nm    # OpenSim uses extension; negate for flexion moment
-  lumbar_bending: lumbar_sideflex_Nm
-  lumbar_rotation: lumbar_rotation_Nm
-  arm_flex_r: arm_flexion_Nm
-  arm_add_r: arm_abduction_Nm
-  arm_rot_r: arm_rotation_Nm
-  elbow_flex_r: elbow_flexion_Nm
-  pro_sup_r: prosup_Nm
+  # Lumbar (BUET names)
+  flex_extension:  lumbar_flexion_Nm
+  lat_bending:     lumbar_sideflex_Nm
+  axial_rotation:  lumbar_rotation_Nm
+  # Right arm
+  arm_flex_r:      shoulder_flexion_r_Nm
+  arm_add_r:       shoulder_abduction_r_Nm
+  arm_rot_r:       shoulder_rotation_r_Nm
+  elbow_flex_r:    elbow_flexion_r_Nm
+  pro_sup_r:       prosup_r_Nm
+  # Left arm
+  arm_flex_l:      shoulder_flexion_l_Nm
+  arm_add_l:       shoulder_abduction_l_Nm
+  arm_rot_l:       shoulder_rotation_l_Nm
+  elbow_flex_l:    elbow_flexion_l_Nm
+  pro_sup_l:       prosup_l_Nm
 
 # --- IK Joint Angle Map ---
-# Same coordinate names as above, mapped to kinematic output labels
-# VERIFIED against actual column names in the pre-computed usg.mot files.
+# Maps BUET model coordinate names → output labels (degrees)
 joint_angle_map:
-  lumbar_extension: lumbar_flexion_deg
-  lumbar_bending: lumbar_sideflex_deg
-  lumbar_rotation: lumbar_rotation_deg
-  arm_flex_r: shoulder_flexion_deg
-  arm_add_r: shoulder_abduction_deg
-  arm_rot_r: shoulder_rotation_deg
-  elbow_flex_r: elbow_flexion_deg
-  pro_sup_r: forearm_pronation_deg
+  # Lumbar (BUET names)
+  flex_extension:  lumbar_flexion_deg
+  lat_bending:     lumbar_sideflex_deg
+  axial_rotation:  lumbar_rotation_deg
+  # Right arm
+  arm_flex_r:      shoulder_flexion_r_deg
+  arm_add_r:       shoulder_abduction_r_deg
+  arm_rot_r:       shoulder_rotation_r_deg
+  elbow_flex_r:    elbow_flexion_r_deg
+  pro_sup_r:       forearm_pronation_r_deg
+  # Left arm
+  arm_flex_l:      shoulder_flexion_l_deg
+  arm_add_l:       shoulder_abduction_l_deg
+  arm_rot_l:       shoulder_rotation_l_deg
+  elbow_flex_l:    elbow_flexion_l_deg
+  pro_sup_l:       forearm_pronation_l_deg
 
 # --- Output / Plotting ---
 output:
   save_plots: true
-  plot_format: png              # png or pdf
-  overwrite_existing: true      # Safety flag: set true to force re-run for existing participants
-  plot_muscles:                 # Which muscle groups to plot per participant
-    - hip_flexors
-    - hip_extensors
-    - knee_extensors
-    - ankle_plantarflexors
-    - ankle_dorsiflexors
+  plot_format: png
+  overwrite_existing: true
+  plot_muscles:
+    - shoulder_abductors_r
+    - shoulder_abductors_l
+    - rotator_cuff_r
+    - rotator_cuff_l
+    - elbow_flexors_r
+    - elbow_flexors_l
+    - elbow_extensors_r
+    - elbow_extensors_l

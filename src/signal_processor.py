@@ -220,18 +220,71 @@ def extract_ik_rms(
     return result
 
 
+def extract_jra_rms(
+    jra_sto: str | Path,
+    jra_column_map: dict[str, str],
+) -> dict[str, float]:
+    """
+    Read a JointReaction .sto file and compute resultant force RMS per joint.
+
+    For each joint, finds columns ending in _fx, _fy, _fz (matching the
+    configured column prefix), computes the 3D resultant magnitude
+    sqrt(Fx² + Fy² + Fz²) at each time step, then takes RMS.
+
+    Parameters
+    ----------
+    jra_sto       : Path to *_JointReaction_ReactionLoads.sto
+    jra_column_map : dict mapping output label -> column prefix
+                    e.g. {'glenohumeral_r_N': 'acromial_r_on_humerus_r_in_ground'}
+
+    Returns
+    -------
+    dict mapping output label -> RMS resultant force (N)
+    """
+    df = read_sto_file(jra_sto)
+    result: dict[str, float] = {}
+
+    for label, col_prefix in jra_column_map.items():
+        fx_col = _find_column(df, [f"{col_prefix}_fx"])
+        fy_col = _find_column(df, [f"{col_prefix}_fy"])
+        fz_col = _find_column(df, [f"{col_prefix}_fz"])
+
+        if fx_col is None or fy_col is None or fz_col is None:
+            logger.warning(
+                "JRA columns for '%s' (prefix '%s') not found in .sto. "
+                "Available: %s",
+                label, col_prefix, [c for c in df.columns if "_fx" in c],
+            )
+            result[label] = float("nan")
+            continue
+
+        fx = df[fx_col].to_numpy()
+        fy = df[fy_col].to_numpy()
+        fz = df[fz_col].to_numpy()
+
+        resultant = compute_resultant_magnitude(fx, fy, fz)
+        result[label] = compute_rms(resultant)
+        logger.debug(
+            "JRA '%s': resultant RMS=%.1f N",
+            label, result[label],
+        )
+
+    return result
+
+
 def process_participant_outputs(
     participant_id: str,
     ik_mot: Path,
     so_activation_sto: Path,
     so_force_sto: Path,
-    id_sto: Path,
+    id_sto: Path | None,
     config: dict[str, Any],
     output_dir: Path,
+    jra_sto: Path | None = None,
 ) -> dict[str, Any]:
     """
-    Master function for Module 7.  Runs all extractions for one participant and
-    returns a single flat dictionary of RMS values ready to be appended to the
+    Master function for signal processing. Runs all extractions for one participant
+    and returns a single flat dictionary of RMS values ready to be appended to the
     master dataset.
 
     Extracts:
@@ -239,6 +292,7 @@ def process_participant_outputs(
       - ID joint moment RMS (Nm)
       - SO muscle activation RMS (dimensionless 0-1)
       - SO muscle force RMS (Newtons)
+      - JRA joint reaction force resultant RMS (Newtons) — if jra_sto provided
 
     Also generates per-participant muscle activation plots if configured.
     """
@@ -251,9 +305,14 @@ def process_participant_outputs(
     row.update(ik_rms)
 
     # --- Joint Moment RMS (Inverse Dynamics) ---
-    logger.info("[%s] Extracting ID joint moment RMS", participant_id)
-    id_rms = extract_moment_rms(id_sto, config.get("joint_dof_map", {}))
-    row.update(id_rms)
+    if id_sto is not None:
+        logger.info("[%s] Extracting ID joint moment RMS", participant_id)
+        id_rms = extract_moment_rms(id_sto, config.get("joint_dof_map", {}))
+        row.update(id_rms)
+    else:
+        logger.warning("[%s] No ID .sto provided — joint moment columns will be NaN", participant_id)
+        for label in config.get("joint_dof_map", {}).values():
+            row[label] = float("nan")
 
     # --- Muscle Activation RMS (Static Optimization) ---
     logger.info("[%s] Extracting SO muscle activation RMS", participant_id)
@@ -266,6 +325,21 @@ def process_participant_outputs(
     so_force_rms = extract_muscle_force_rms(so_force_sto, muscle_groups)
     so_force_renamed = {f"{k}_force_N": v for k, v in so_force_rms.items()}
     row.update(so_force_renamed)
+
+    # --- Joint Reaction Force RMS (JRA) ---
+    if jra_sto is not None:
+        logger.info("[%s] Extracting JRA joint reaction force RMS", participant_id)
+        jra_column_map = config.get("joint_reaction_analysis", {}).get("jra_column_map", {})
+        if jra_column_map:
+            jra_rms = extract_jra_rms(jra_sto, jra_column_map)
+            row.update(jra_rms)
+        else:
+            logger.warning("[%s] jra_column_map not configured — skipping JRA extraction", participant_id)
+    else:
+        logger.warning("[%s] No JRA .sto provided — JRA columns will be NaN", participant_id)
+        jra_column_map = config.get("joint_reaction_analysis", {}).get("jra_column_map", {})
+        for label in jra_column_map:
+            row[label] = float("nan")
 
     # --- Plots ---
     if config.get("output", {}).get("save_plots", True):
