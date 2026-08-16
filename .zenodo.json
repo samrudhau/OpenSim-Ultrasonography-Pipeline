@@ -1,5 +1,5 @@
 {
-  "title": "OpenSim Ultrasonography Pipeline — Bilateral Upper Extremity Trunk (BUET) Model",
+  "title": "OpenSim Ultrasonography Pipeline - Inverse dynamic modelling to estimate biomechanical stressors generated during sonography task using Bilateral Upper Extremity Trunk (BUET) Model",
   "description": "Automated Python pipeline for multi-patient biomechanical analysis of sonographers using OpenSim. This release integrates the Bilateral Upper Extremity Trunk (BUET) model for direct-use (no re-scaling) computation of Inverse Dynamics (ID), Static Optimization (SO), and Joint Reaction Analysis (JRA) on both shoulders, elbows, and wrists simultaneously. Results are compiled into a JAMOVI-ready master dataset CSV. Designed for occupational biomechanics research on musculoskeletal loading in ultrasonography scanning tasks.",
   "upload_type": "software",
   "access_right": "open",
@@ -19,8 +19,7 @@
   ],
   "creators": [
     {
-      "name": "Samrudhau",
-      "affiliation": "BUET"
+      "name": "Samrudh A U."
     }
   ],
   "related_identifiers": [
@@ -31,8 +30,10 @@
     }
   ],
   "communities": [
-    { "identifier": "zenodo" }
+    {
+      "identifier": "zenodo"
+    }
   ],
   "version": "2.0.0",
-  "notes": "This version (v2.0.0) replaces the Lai-Uhlrich lower-body model with the Bilateral Upper Extremity Trunk (BUET) model. Key changes: (1) No re-scaling — BUET model used as-is; (2) Lumbar coordinate renaming (lumbar_extension→flex_extension etc.) via new mot_adapter module; (3) JRA now active as a full pipeline step for bilateral glenohumeral, elbow, radioulnar, and wrist joints; (4) Bilateral muscle group configuration (deltoid, rotator cuff, elbow flexors/extensors, pronators, lumbar erectors, latissimus dorsi); (5) Dynamic cohort-median validation replaces hardcoded thesis medians."
+  "notes": "This version (v2.0.0) replaces the Lai-Uhlrich lower-body model with the Bilateral Upper Extremity Trunk (BUET) model. Key changes: (1) No re-scaling - BUET model used as-is; (2) Lumbar coordinate renaming (lumbar_extension→flex_extension etc.) via new mot_adapter module; (3) JRA now active as a full pipeline step for bilateral glenohumeral, elbow, radioulnar, and wrist joints; (4) Bilateral muscle group configuration (deltoid, rotator cuff, elbow flexors/extensors, pronators, lumbar erectors, latissimus dorsi); (5) Dynamic cohort-median validation replaces hardcoded thesis medians."
 }

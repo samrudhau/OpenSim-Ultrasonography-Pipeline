@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it using these metadata."
 type: software
-title: "OpenSim Ultrasonography Pipeline — Bilateral Upper Extremity Trunk (BUET) Model"
+title: "OpenSim Ultrasonography Pipeline - Inverse dynamic modelling to estimate biomechanical stressors generated during sonography task using Bilateral Upper Extremity Trunk (BUET) Model"
 version: "2.0.0"
 date-released: "2026-08-16"
 license: MIT
@@ -27,5 +27,4 @@ keywords:
   - occupational ergonomics
   - Python
 authors:
-  - family-names: Samrudhau
-    affiliation: BUET
+  - family-names: Samrudh A U
