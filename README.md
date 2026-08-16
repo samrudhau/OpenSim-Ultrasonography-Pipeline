@@ -230,7 +230,7 @@ opensim_pipeline/
 If you use this pipeline in your research, please cite:
 
 ```
-Samrudhau. (2026). OpenSim Ultrasonography Pipeline - BUET Model (v2.0.0).
+Samrudh A. U. (2026). OpenSim Ultrasonography Pipeline - BUET Model (v2.0.0).
 Zenodo. https://doi.org/10.5281/zenodo.20252586
 ```
 
