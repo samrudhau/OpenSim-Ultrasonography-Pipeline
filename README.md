@@ -1,4 +1,4 @@
-# OpenSim Ultrasonography Pipeline — BUET Model
+# OpenSim Ultrasonography Pipeline - BUET Model
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20252586.svg)](https://doi.org/10.5281/zenodo.20252586)
 
@@ -6,10 +6,10 @@ Automated Python pipeline for multi-patient biomechanical analysis of sonographe
 using OpenSim and the **Bilateral Upper Extremity Trunk (BUET) model**.
 
 Replaces manual GUI steps for Inverse Kinematics, Inverse Dynamics, Static
-Optimization, and Joint Reaction Analysis — and compiles results into a single
+Optimization, and Joint Reaction Analysis - and compiles results into a single
 JAMOVI-ready CSV for statistical analysis.
 
-> **v2.0.0 — BUET Model Integration**
+> **v2.0.0 - BUET Model Integration**
 > This release switches from the Lai-Uhlrich lower-body model to the BUET model,
 > enabling bilateral shoulder, elbow, and wrist analysis without re-scaling.
 > See [CHANGELOG](#changelog) below.
@@ -104,8 +104,8 @@ python run_pipeline.py
 ### Specific participants only:
 
 ```bash
-python run_pipeline.py --participants AKSHITHA
-python run_pipeline.py --participants AKSHITHA,SHIVANGI
+python run_pipeline.py --participants P001
+python run_pipeline.py --participants P001,P002,P003
 ```
 
 ### Start from a specific step (skip earlier steps):
@@ -207,18 +207,18 @@ opensim_pipeline/
 
 ## Changelog
 
-### v2.0.0 (2026-08-16) — BUET Model Integration
+### v2.0.0 (2026-08-16) - BUET Model Integration
 
-- **New**: `src/mot_adapter.py` — renames 3 lumbar DOF columns in OpenCap `.mot` files to match BUET model coordinate names (`lumbar_extension` → `flex_extension`, etc.)
-- **New**: BUET model mode in `src/scaler.py` — copies `Bilateral Upper Extremity Trunk Model.osim` from participant's folder without re-scaling
-- **Updated**: `src/jra_runner.py` — rewritten with XML-based `AnalyzeTool` (same approach as SO runner); now correctly produces output for bilateral glenohumeral, elbow, radioulnar, and wrist joints
-- **Updated**: `run_pipeline.py` — 6-step pipeline: `scale → ik → id → so → jra → process`; JRA is now a first-class step
-- **Updated**: `src/signal_processor.py` — new `extract_jra_rms()` computes 3D resultant force RMS per joint
-- **Updated**: `config/pipeline_config.yaml` — full bilateral UE muscle group config (deltoid, rotator cuff, elbow flexors/extensors, pronators, lumbar erectors, latissimus dorsi) and JRA joint map
-- **Updated**: `src/dataset_compiler.py` — bilateral column order for both sides
-- **Updated**: `src/report_generator.py` — dynamic cohort-median validation (replaces hardcoded Lai-Uhlrich thesis medians)
+- **New**: `src/mot_adapter.py` - renames 3 lumbar DOF columns in OpenCap `.mot` files to match BUET model coordinate names (`lumbar_extension` → `flex_extension`, etc.)
+- **New**: BUET model mode in `src/scaler.py` - copies `Bilateral Upper Extremity Trunk Model.osim` from participant's folder without re-scaling
+- **Updated**: `src/jra_runner.py` - rewritten with XML-based `AnalyzeTool` (same approach as SO runner); now correctly produces output for bilateral glenohumeral, elbow, radioulnar, and wrist joints
+- **Updated**: `run_pipeline.py` - 6-step pipeline: `scale → ik → id → so → jra → process`; JRA is now a first-class step
+- **Updated**: `src/signal_processor.py` - new `extract_jra_rms()` computes 3D resultant force RMS per joint
+- **Updated**: `config/pipeline_config.yaml` - full bilateral UE muscle group config (deltoid, rotator cuff, elbow flexors/extensors, pronators, lumbar erectors, latissimus dorsi) and JRA joint map
+- **Updated**: `src/dataset_compiler.py` - bilateral column order for both sides
+- **Updated**: `src/report_generator.py` - dynamic cohort-median validation (replaces hardcoded Lai-Uhlrich thesis medians)
 
-### v1.x — Lai-Uhlrich Model (archived)
+### v1.x - Lai-Uhlrich Model (archived)
 
 - Original pipeline using OpenCap-scaled Lai-Uhlrich model
 - ID, SO for lower-body and single-arm analysis
@@ -230,7 +230,7 @@ opensim_pipeline/
 If you use this pipeline in your research, please cite:
 
 ```
-Samrudhau. (2026). OpenSim Ultrasonography Pipeline — BUET Model (v2.0.0).
+Samrudhau. (2026). OpenSim Ultrasonography Pipeline - BUET Model (v2.0.0).
 Zenodo. https://doi.org/10.5281/zenodo.20252586
 ```
 
